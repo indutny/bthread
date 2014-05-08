@@ -1,0 +1,39 @@
+{
+  "name": "bthread",
+  "version": "0.0.0",
+  "description": "Bitcoin based message thread",
+  "main": "lib/bthread.js",
+  "bin": "bin/bthread",
+  "scripts": {
+    "test": "mocha --reporter spec"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:indutny/bthread"
+  },
+  "keywords": [
+    "bcoin",
+    "bitcoin",
+    "thread",
+    "messaging",
+    "forum",
+    "blog"
+  ],
+  "author": "Fedor Indutny <fedor@indutny.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/indutny/bthread/issues"
+  },
+  "homepage": "https://github.com/indutny/bthread",
+  "dependencies": {
+    "bcoin": "^0.1.1",
+    "leveldown": "^0.10.2",
+    "levelup": "^0.18.3",
+    "progress": "^1.1.5",
+    "prompt": "^0.2.12",
+    "yargs": "^1.2.1"
+  },
+  "devDependencies": {
+    "mocha": "^1.18.2"
+  }
+}

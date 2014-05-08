@@ -1,0 +1,131 @@
+#!/usr/bin/env node
+var bthread = require('../');
+var utils = require('./utils');
+
+var net = require('net');
+var path = require('path');
+var progress = require('progress');
+var prompt = require('prompt');
+var leveldown = require('leveldown');
+
+var argv = require('yargs')
+    .demand([ 'host' ])
+    .alias('h', 'host')
+    .alias('p', 'passphrase')
+    .argv;
+
+var addrs = [
+  'seed.bitcoin.sipa.be',
+  'dnsseed.bluematt.me',
+  'dnsseed.bitcoin.dashjr.org',
+  'seed.bitcoinstats.com',
+  'seed.bitnodes.io',
+  'bitseed.xf2.org'
+];
+
+var logger = utils.logger();
+
+logger.log('Welcome to BThread');
+logger.log('You are going to start participating on: %s', argv.host);
+if (argv.passphrase)
+  return onPassphrase(null, { passphrase: argv.passphrase });
+
+logger.log('Please supply your passphrase so we will be able to identify you');
+prompt.start();
+prompt.get({
+  properties: {
+    passphrase: {
+      hidden: true
+    }
+  }
+}, onPassphrase);
+
+var thread;
+
+function onPassphrase(err, result) {
+  if (err) {
+    logger.log('Cancelled');
+    return process.exit();
+  }
+
+  var pass = result.passphrase;
+
+  thread = new bthread({
+    db: leveldown,
+    dbPath: path.resolve(__dirname, '..', 'db'),
+    host: argv.host,
+    passphrase: pass,
+
+    createConnection: function() {
+      return net.connect(8333, addrs[(Math.random() * addrs.length) | 0]);
+    }
+  });
+
+  thread.once('dns-record', function(r) {
+    logger.log('===================================================');
+    logger.log('Set this as TXT record for %s:', argv.host);
+    logger.log('    ' + r);
+    logger.log('===================================================');
+  });
+
+  var searchBar = null;
+  var searchLast = 0;
+  thread.on('search', function(range, a, b) {
+    if (logger.paused !== 0)
+      return;
+    if (!searchBar || searchBar.total !== b) {
+      var start = new Date(range.start * 1000).toDateString();
+      var end = new Date(range.end * 1000).toDateString();
+      searchBar = new progress('  searching ' + start + ' -> ' + end +
+                               ' [:bar] :etas', {
+        total: b,
+        width: 20
+      });
+      searchLast = 0;
+    }
+    searchBar.tick(a - searchLast);
+    searchLast = a;
+  });
+
+  thread.on('log', function() {
+    logger.log.apply(logger, arguments);
+  });
+
+  thread.on('balance', function(value) {
+    logger.log('Wallet balance updated: %s', value.toString(10));
+  });
+
+  thread.on('wallet', function(addr, kind) {
+    if (kind === 'self') {
+      logger.log('Your wallet is %s', addr);
+    } else {
+      logger.log('Thread owner\'s wallet is %s', addr);
+    }
+  });
+
+  thread.once('search-end', function() {
+    start();
+  });
+}
+
+function start() {
+  if (argv._[0] === 'post') {
+    logger.log('');
+    logger.log('Enter your message:');
+    logger.pause();
+
+    var chunks = [];
+    process.stdin.on('readable', function() {
+      var chunk = this.read();
+      if (chunk)
+        chunks.push(chunk);
+    });
+
+    process.stdin.once('end', function() {
+      logger.unpause();
+      thread.post(Buffer.concat(chunks), function() {
+        logger.log('Message posted');
+      });
+    });
+  }
+}
