@@ -18,6 +18,7 @@ var argv = require('yargs')
     .alias('h', 'host')
     .alias('p', 'passphrase')
     .alias('c', 'post-cost')
+    .alias('r', 'reply-to')
     .argv;
 
 var addrs = [
@@ -110,7 +111,10 @@ function onPassphrase(err, result) {
     if (kind === 'self') {
       logger.log('Your wallet is %s', addr);
     } else {
-      logger.log('Thread owner\'s wallet is %s', addr);
+      if (thread.isOwner)
+        logger.log('You are the thread\'s owner');
+      else
+        logger.log('Thread owner\'s wallet is %s', addr);
     }
   });
 
@@ -152,7 +156,11 @@ function post() {
       return;
     }
 
-    postMsg = msg;
+    postMsg = {
+      ts: +new Date,
+      content: msg,
+      'reply-to': argv['reply-to']
+    };
     thread.post(postMsg, confirm, onPost);
   });
 
@@ -178,12 +186,14 @@ function post() {
     });
   }
 
-  function onPost(err, hash) {
+  function onPost(err, status, tx) {
     if (err && err.minBalance)
       return retry(err.minBalance);
     if (err)
       throw err;
-    logger.log('Messages posted, the TX hash is %s', hash);
+    logger.log('Messages %s posted, the TX hash is %s',
+               status ? 'successfully' : 'not',
+               tx.hash('hex'));
   }
 
   function retry(balance) {
