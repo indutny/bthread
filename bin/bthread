@@ -2,6 +2,7 @@
 var bthread = require('../');
 var utils = require('./utils');
 
+var bn = require('bn.js');
 var dns = require('dns');
 var net = require('net');
 var path = require('path');
@@ -54,7 +55,7 @@ var thread;
 function onPassphrase(err, result) {
   if (err) {
     logger.log('Cancelled');
-    return process.exit();
+    return process.exit(1);
   }
 
   var pass = result.passphrase;
@@ -83,11 +84,10 @@ function onPassphrase(err, result) {
   var searchBar = null;
   var searchLast = 0;
   thread.on('search', function(range, a, b) {
-    if (logger.paused !== 0)
-      return;
     if (!searchBar || searchBar.total !== b) {
       var start = new Date(range.start * 1000).toDateString();
       var end = new Date(range.end * 1000).toDateString();
+      logger.pause();
       searchBar = new progress('  searching ' + start + ' -> ' + end +
                                ' [:bar] :etas', {
         total: b,
@@ -96,6 +96,8 @@ function onPassphrase(err, result) {
       searchLast = 0;
     }
     searchBar.tick(a - searchLast);
+    if (a === b)
+      logger.unpause();
     searchLast = a;
   });
 
@@ -118,17 +120,31 @@ function onPassphrase(err, result) {
     }
   });
 
-  thread.once('search-end', function() {
-    start();
-  });
+  var waiting = 2;
+  thread.once('search-end', next);
+  thread.once('full', next);
+  function next() {
+    if (--waiting === 0)
+      start();
+  }
 }
 
 function start() {
   if (argv._[0] === 'post')
-    return post();
+    return post(exit);
+  else if (argv._[0] === 'list')
+    return list(exit);
+  else if (argv._[0] === 'show')
+    return show(argv._[1], exit);
+  else if (argv._[0] === 'key')
+    return key(exit);
 }
 
-function post() {
+function exit() {
+  thread.close();
+}
+
+function post(cb) {
   var tmpFile = path.resolve(os.tmpDir(), (+new Date) + Math.random() + '.bt');
   var ed = process.env.EDITOR || 'vim';
   if (!process.env.EDITOR)
@@ -159,9 +175,30 @@ function post() {
     postMsg = {
       ts: +new Date,
       content: msg,
-      'reply-to': argv['reply-to']
+      replyTo: argv['reply-to']
     };
-    thread.post(postMsg, confirm, onPost);
+
+    // Owner, no point in sending additional money to self
+    if (thread.isOwner)
+      return thread.post(new bn(0), postMsg, confirm, onPost);
+
+    prompt.get({
+      properties: {
+        cost: {
+          description: 'Please enter amount of additional Satoshi to send to ' +
+                       'the author',
+          pattern: /^\d+$/gi,
+          required: true
+        }
+      }
+    }, function(err, result) {
+      if (err) {
+        logger.log('Cancelled');
+        return process.exit(1);
+      }
+
+      thread.post(new bn(result.cost, 10), postMsg, confirm, onPost);
+    });
   });
 
   function confirm(out, fee, cb) {
@@ -179,7 +216,7 @@ function post() {
     }, function(err, result) {
       if (err) {
         logger.log('Cancelled');
-        return process.exit();
+        return process.exit(1);
       }
 
       cb(/y/i.test(result.confirm));
@@ -194,6 +231,9 @@ function post() {
     logger.log('Messages %s posted, the TX hash is %s',
                status ? 'successfully' : 'not',
                tx.hash('hex'));
+
+    // Ensure that enough acks will be acquired
+    setTimeout(cb, 5000);
   }
 
   function retry(balance) {
@@ -216,4 +256,17 @@ function post() {
         this.post(postMsg, onPost);
     });
   }
+}
+
+function list(cb) {
+  thread.list().forEach(function(post) {
+    logger.log('* %s %s', post.hash, JSON.stringify(post.title));
+  });
+  cb();
+}
+
+function key(cb) {
+  logger.log('Your private key is %s',
+             thread.wallet.self.getPrivateKey('base58'));
+  cb();
 }
