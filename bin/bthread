@@ -45,7 +45,6 @@ prompt.get({
     }
   }
 }, function(err, result) {
-  prompt.pause();
   onPassphrase(err, result);
 });
 
@@ -133,12 +132,14 @@ function post() {
 
   var line = 'Please write your BThread message here\n';
   fs.writeFileSync(tmpFile, 'Please write your BThread message here\n');
+  logger.pause();
   ed = spawn(ed, [ tmpFile ], {
     stdio: [ 0, 1, 2 ]
   });
 
   var postMsg = null;
   ed.once('close', function() {
+    logger.unpause();
     var msg = fs.readFileSync(tmpFile).toString();
 
     // Skip predefined string
@@ -152,8 +153,30 @@ function post() {
     }
 
     postMsg = msg;
-    thread.post(postMsg, onPost);
+    thread.post(postMsg, confirm, onPost);
   });
+
+  function confirm(out, fee, cb) {
+    logger.log('The TX value is be %s satoshi, and fee is %s satoshi',
+               out.toString(10),
+               fee.toString(10));
+    prompt.get({
+      properties: {
+        confirm: {
+          description: 'Please confirm your actions by entering `yes`',
+          pattern: /^(yes|no|y|n)$/gi,
+          required: true
+        }
+      }
+    }, function(err, result) {
+      if (err) {
+        logger.log('Cancelled');
+        return process.exit();
+      }
+
+      cb(/y/i.test(result.confirm));
+    });
+  }
 
   function onPost(err, hash) {
     if (err && err.minBalance)
@@ -169,7 +192,12 @@ function post() {
     logger.log('Minimum required value is %s satoshi (~%d BTC)',
                balance.toString(10),
                balance.toString(10) / 10000000);
-    logger.log('Please send some to your address: %s to continue',
+
+    var req = balance.sub(thread.balance);
+    logger.log('Please send %d satoshi (~%d BTC) to your address: ' +
+                   '%s to continue',
+               req.toString(10),
+               req.toString(10) / 10000000,
                thread.wallet.self.getAddress());
 
     // Retry later
