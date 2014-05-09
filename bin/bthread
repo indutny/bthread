@@ -2,8 +2,13 @@
 var bthread = require('../');
 var utils = require('./utils');
 
+var dns = require('dns');
 var net = require('net');
 var path = require('path');
+var os = require('os');
+var spawn = require('child_process').spawn;
+var fs = require('fs');
+
 var progress = require('progress');
 var prompt = require('prompt');
 var leveldown = require('leveldown');
@@ -12,6 +17,7 @@ var argv = require('yargs')
     .demand([ 'host' ])
     .alias('h', 'host')
     .alias('p', 'passphrase')
+    .alias('c', 'post-cost')
     .argv;
 
 var addrs = [
@@ -38,7 +44,10 @@ prompt.get({
       hidden: true
     }
   }
-}, onPassphrase);
+}, function(err, result) {
+  prompt.pause();
+  onPassphrase(err, result);
+});
 
 var thread;
 
@@ -55,6 +64,9 @@ function onPassphrase(err, result) {
     dbPath: path.resolve(__dirname, '..', 'db'),
     host: argv.host,
     passphrase: pass,
+    postCost: argv.postCost,
+
+    resolveTxt: dns.resolveTxt,
 
     createConnection: function() {
       return net.connect(8333, addrs[(Math.random() * addrs.length) | 0]);
@@ -91,8 +103,8 @@ function onPassphrase(err, result) {
     logger.log.apply(logger, arguments);
   });
 
-  thread.on('balance', function(value) {
-    logger.log('Wallet balance updated: %s', value.toString(10));
+  thread.on('balance', function() {
+    logger.log('Wallet balance updated: %s', thread.balance.toString(10));
   });
 
   thread.on('wallet', function(addr, kind) {
@@ -109,23 +121,61 @@ function onPassphrase(err, result) {
 }
 
 function start() {
-  if (argv._[0] === 'post') {
+  if (argv._[0] === 'post')
+    return post();
+}
+
+function post() {
+  var tmpFile = path.resolve(os.tmpDir(), (+new Date) + Math.random() + '.bt');
+  var ed = process.env.EDITOR || 'vim';
+  if (!process.env.EDITOR)
+    logger.log('No EDITOR env variable found, spawning %s', ed);
+
+  var line = 'Please write your BThread message here\n';
+  fs.writeFileSync(tmpFile, 'Please write your BThread message here\n');
+  ed = spawn(ed, [ tmpFile ], {
+    stdio: [ 0, 1, 2 ]
+  });
+
+  var postMsg = null;
+  ed.once('close', function() {
+    var msg = fs.readFileSync(tmpFile).toString();
+
+    // Skip predefined string
+    if (msg.slice(0, line.length) === line)
+      msg = msg.slice(line.length);
+
+    if (msg.length === 0) {
+      logger.log('Error: message file is empty');
+      process.exit(1);
+      return;
+    }
+
+    postMsg = msg;
+    thread.post(postMsg, onPost);
+  });
+
+  function onPost(err, hash) {
+    if (err && err.minBalance)
+      return retry(err.minBalance);
+    if (err)
+      throw err;
+    logger.log('Messages posted, the TX hash is %s', hash);
+  }
+
+  function retry(balance) {
     logger.log('');
-    logger.log('Enter your message:');
-    logger.pause();
+    logger.log('You don\'t have enough bitcoins to post a message');
+    logger.log('Minimum required value is %s satoshi (~%d BTC)',
+               balance.toString(10),
+               balance.toString(10) / 10000000);
+    logger.log('Please send some to your address: %s to continue',
+               thread.wallet.self.getAddress());
 
-    var chunks = [];
-    process.stdin.on('readable', function() {
-      var chunk = this.read();
-      if (chunk)
-        chunks.push(chunk);
-    });
-
-    process.stdin.once('end', function() {
-      logger.unpause();
-      thread.post(Buffer.concat(chunks), function() {
-        logger.log('Message posted');
-      });
+    // Retry later
+    thread.once('balance', function() {
+      if (this.balance.cmp(balance) >= 0)
+        this.post(postMsg, onPost);
     });
   }
 }

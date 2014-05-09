@@ -27,6 +27,7 @@
   "homepage": "https://github.com/indutny/bthread",
   "dependencies": {
     "bcoin": "^0.1.1",
+    "bn.js": "^0.4.0",
     "leveldown": "^0.10.2",
     "levelup": "^0.18.3",
     "progress": "^1.1.5",
