@@ -19,7 +19,8 @@ var argv = require('yargs')
            ' * List messages: $0 list\n' +
            ' * Show message: $0 show <hash-or-first-bytes-of-it>\n' +
            ' * Post message: $0 post\n' +
-           ' * Post reply: $0 post --repl-to=<full-hash>')
+           ' * Post reply: $0 post --repl-to=<full-hash>\n' +
+           ' * Get private key: $0 key')
     .demand([ 'host' ])
     .alias('h', 'host')
     .alias('p', 'passphrase')
