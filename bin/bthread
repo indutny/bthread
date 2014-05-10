@@ -229,14 +229,14 @@ function post(cb) {
     });
   }
 
-  function onPost(err, status, tx) {
+  function onPost(err, status, hash) {
     if (err && err.minBalance)
       return retry(err.minBalance);
     if (err)
       throw err;
     logger.out('Messages %s posted, the TX hash is %s',
                status ? 'successfully' : 'not',
-               tx.hash('hex'));
+               hash);
 
     // Ensure that enough acks will be acquired
     setTimeout(cb, 5000);
