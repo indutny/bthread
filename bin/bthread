@@ -291,17 +291,11 @@ function show(hash, cb) {
     return cb();
   }
 
-  var found = thread.list().some(function(post) {
-    if (post.hash !== hash)
-      return false;
-
-    logger.out(post.content);
-
-    return true;
-  });
-
-  if (!found)
+  var post = thread.list(hash);
+  if (!post)
     logger.err('Post with hash %s not found', hash);
+  else
+    logger.out(post.content);
 
   cb();
 }
