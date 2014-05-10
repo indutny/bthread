@@ -33,16 +33,17 @@ var addrs = [
 
 var logger = utils.logger();
 
-logger.log('Welcome to BThread');
-logger.log('You are going to start participating on: %s', argv.host);
+logger.info('Welcome to BThread');
+logger.info('You are going to start participating on: %s', argv.host);
 if (argv.passphrase)
   return onPassphrase(null, { passphrase: argv.passphrase });
 
-logger.log('Please supply your passphrase so we will be able to identify you');
+logger.info('Please supply your passphrase so we will be able to identify you');
 prompt.start();
 prompt.get({
   properties: {
     passphrase: {
+      required: true,
       hidden: true
     }
   }
@@ -54,11 +55,13 @@ var thread;
 
 function onPassphrase(err, result) {
   if (err) {
-    logger.log('Cancelled');
+    logger.err('Cancelled');
     return exit();
   }
 
   var pass = result.passphrase;
+  if (pass.length < 20)
+    logger.err('Please use passphrase with length > 20 symbols');
 
   thread = new bthread({
     db: leveldown,
@@ -75,10 +78,10 @@ function onPassphrase(err, result) {
   });
 
   thread.once('dns-record', function(r) {
-    logger.log('===================================================');
-    logger.log('Set this as TXT record for %s:', argv.host);
-    logger.log('    ' + r);
-    logger.log('===================================================');
+    logger.info('===================================================');
+    logger.info('Set this as TXT record for %s:', argv.host);
+    logger.info('    ' + r);
+    logger.info('===================================================');
   });
 
   var searchBar = null;
@@ -102,21 +105,21 @@ function onPassphrase(err, result) {
   });
 
   thread.on('log', function() {
-    logger.log.apply(logger, arguments);
+    logger.info.apply(logger, arguments);
   });
 
   thread.on('balance', function() {
-    logger.log('Wallet balance updated: %s', thread.balance.toString(10));
+    logger.info('Wallet balance updated: %s', thread.balance.toString(10));
   });
 
   thread.on('wallet', function(addr, kind) {
     if (kind === 'self') {
-      logger.log('Your wallet is %s', addr);
+      logger.info('Your wallet is %s', addr);
     } else {
       if (thread.isOwner)
-        logger.log('You are the thread\'s owner');
+        logger.info('You are the thread\'s owner');
       else
-        logger.log('Thread owner\'s wallet is %s', addr);
+        logger.info('Thread owner\'s wallet is %s', addr);
     }
   });
 
@@ -141,14 +144,15 @@ function start() {
 }
 
 function exit() {
-  thread.close();
+  if (thread)
+    thread.close();
 }
 
 function post(cb) {
   var tmpFile = path.resolve(os.tmpDir(), (+new Date) + Math.random() + '.bt');
   var ed = process.env.EDITOR || 'vim';
   if (!process.env.EDITOR)
-    logger.log('No EDITOR env variable found, spawning %s', ed);
+    logger.err('No EDITOR env variable found, spawning %s', ed);
 
   var line = 'Please write your BThread message here\n';
   fs.writeFileSync(tmpFile, 'Please write your BThread message here\n');
@@ -171,7 +175,7 @@ function post(cb) {
       msg = msg.slice(line.length);
 
     if (msg.length === 0) {
-      logger.log('Error: message file is empty');
+      logger.err('Error: message file is empty');
       return exit();
     }
 
@@ -195,7 +199,7 @@ function post(cb) {
       }
     }, function(err, result) {
       if (err) {
-        logger.log('Cancelled');
+        logger.err('Cancelled');
         return exit();
       }
 
@@ -204,9 +208,9 @@ function post(cb) {
   });
 
   function confirm(out, fee, cb) {
-    logger.log('The TX value is be %s satoshi, and fee is %s satoshi',
-               out.toString(10),
-               fee.toString(10));
+    logger.info('The TX value is be %s satoshi, and fee is %s satoshi',
+                out.toString(10),
+                fee.toString(10));
     prompt.get({
       properties: {
         confirm: {
@@ -217,7 +221,7 @@ function post(cb) {
       }
     }, function(err, result) {
       if (err) {
-        logger.log('Cancelled');
+        logger.err('Cancelled');
         return exit();
       }
 
@@ -230,7 +234,7 @@ function post(cb) {
       return retry(err.minBalance);
     if (err)
       throw err;
-    logger.log('Messages %s posted, the TX hash is %s',
+    logger.out('Messages %s posted, the TX hash is %s',
                status ? 'successfully' : 'not',
                tx.hash('hex'));
 
@@ -239,18 +243,18 @@ function post(cb) {
   }
 
   function retry(balance) {
-    logger.log('');
-    logger.log('You don\'t have enough bitcoins to post a message');
-    logger.log('Minimum required value is %s satoshi (~%d BTC)',
-               balance.toString(10),
-               balance.toString(10) / 10000000);
+    logger.info('');
+    logger.info('You don\'t have enough bitcoins to post a message');
+    logger.info('Minimum required value is %s satoshi (~%d BTC)',
+                balance.toString(10),
+                balance.toString(10) / 10000000);
 
     var req = balance.sub(thread.balance);
-    logger.log('Please send %d satoshi (~%d BTC) to your address: ' +
+    logger.info('Please send %d satoshi (~%d BTC) to your address: ' +
                    '%s to continue',
-               req.toString(10),
-               req.toString(10) / 10000000,
-               thread.wallet.self.getAddress());
+                req.toString(10),
+                req.toString(10) / 10000000,
+                thread.wallet.self.getAddress());
 
     // Retry later
     thread.once('balance', function() {
@@ -263,12 +267,12 @@ function post(cb) {
 function list(cb) {
   function print(post, prefix) {
     if (post.author !== 'owner') {
-      logger.log(prefix + '* %s %s by <%s>',
+      logger.out(prefix + '* %s %s by <%s>',
                  post.hash,
                  JSON.stringify(post.title),
                  post.author);
     } else {
-      logger.log(prefix + '* %s %s', post.hash, JSON.stringify(post.title));
+      logger.out(prefix + '* %s %s', post.hash, JSON.stringify(post.title));
     }
     post.replies.forEach(function(reply) {
       print(reply, prefix + '  ');
@@ -282,7 +286,7 @@ function list(cb) {
 
 function show(hash, cb) {
   if (!hash) {
-    logger.log('Hash argument is required: %s [opts] show <hash>',
+    logger.err('Hash argument is required: %s [opts] show <hash>',
                process.argv[1]);
     return cb();
   }
@@ -291,19 +295,19 @@ function show(hash, cb) {
     if (post.hash !== hash)
       return false;
 
-    logger.log(post.content);
+    logger.out(post.content);
 
     return true;
   });
 
   if (!found)
-    logger.log('Post with hash %s not found', hash);
+    logger.err('Post with hash %s not found', hash);
 
   cb();
 }
 
 function key(cb) {
-  logger.log('Your private key is %s',
+  logger.out('Your private key is %s',
              thread.wallet.self.getPrivateKey('base58'));
   cb();
 }

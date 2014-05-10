@@ -24,11 +24,28 @@ Logger.prototype.unpause = function unpause() {
     this.log.apply(this, queue[i]);
 };
 
-Logger.prototype.log = function log() {
+Logger.prototype.out = function out() {
   if (this.paused > 0) {
     this.queue.push(arguments);
     return;
   }
 
   console.log.apply(console, arguments);
+};
+
+Logger.prototype._err = function _err(kind, args) {
+  if (this.paused > 0) {
+    this.queue.push(arguments);
+    return;
+  }
+
+  console.error.apply(console, args);
+};
+
+Logger.prototype.info = function info() {
+  return this._err('info', arguments);
+};
+
+Logger.prototype.err = function err() {
+  return this._err('err', arguments);
 };
