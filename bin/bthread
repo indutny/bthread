@@ -91,8 +91,8 @@ function onPassphrase(err, result) {
       var start = new Date(range.start * 1000).toDateString();
       var end = new Date(range.end * 1000).toDateString();
       logger.pause();
-      searchBar = new progress('  searching ' + start + ' -> ' + end +
-                               ' [:bar] :etas', {
+      searchBar = new progress('  \x1b[34;msearching ' + start + ' -> ' + end +
+                               ' [:bar] :etas\x1b[0;m', {
         total: b,
         width: 20
       });

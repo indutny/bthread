@@ -25,20 +25,24 @@ Logger.prototype.unpause = function unpause() {
 };
 
 Logger.prototype.out = function out() {
+  var args = Array.prototype.slice.call(arguments);
   if (this.paused > 0) {
-    this.queue.push('out', arguments);
+    this.queue.push('out', args);
     return;
   }
 
-  console.log.apply(console, arguments);
+  console.log.apply(console, args);
 };
 
 Logger.prototype._err = function _err(kind, args) {
+  args = Array.prototype.slice.call(args);
   if (this.paused > 0) {
-    this.queue.push(kind, arguments);
+    this.queue.push(kind, args);
     return;
   }
 
+  args[0] = '\x1b[' + (kind === 'err' ? 31 : 34) + ';m' + args[0] +
+            '\x1b[0;m';
   console.error.apply(console, args);
 };
 
