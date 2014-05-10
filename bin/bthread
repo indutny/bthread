@@ -55,7 +55,7 @@ var thread;
 function onPassphrase(err, result) {
   if (err) {
     logger.log('Cancelled');
-    return process.exit(1);
+    return exit();
   }
 
   var pass = result.passphrase;
@@ -161,6 +161,10 @@ function post(cb) {
   ed.once('close', function() {
     logger.unpause();
     var msg = fs.readFileSync(tmpFile).toString();
+    try {
+      fs.unlinkSync(tmpFile);
+    } catch(e) {
+    }
 
     // Skip predefined string
     if (msg.slice(0, line.length) === line)
@@ -168,12 +172,10 @@ function post(cb) {
 
     if (msg.length === 0) {
       logger.log('Error: message file is empty');
-      process.exit(1);
-      return;
+      return exit();
     }
 
     postMsg = {
-      ts: +new Date,
       content: msg,
       replyTo: argv['reply-to']
     };
@@ -194,7 +196,7 @@ function post(cb) {
     }, function(err, result) {
       if (err) {
         logger.log('Cancelled');
-        return process.exit(1);
+        return exit();
       }
 
       thread.post(new bn(result.cost, 10), postMsg, confirm, onPost);
@@ -216,7 +218,7 @@ function post(cb) {
     }, function(err, result) {
       if (err) {
         logger.log('Cancelled');
-        return process.exit(1);
+        return exit();
       }
 
       cb(/y/i.test(result.confirm));
@@ -259,9 +261,44 @@ function post(cb) {
 }
 
 function list(cb) {
+  function print(post, prefix) {
+    if (post.author !== 'owner') {
+      logger.log(prefix + '* %s %s by <%s>',
+                 post.hash,
+                 JSON.stringify(post.title),
+                 post.author);
+    } else {
+      logger.log(prefix + '* %s %s', post.hash, JSON.stringify(post.title));
+    }
+    post.replies.forEach(function(reply) {
+      print(reply, prefix + '  ');
+    });
+  }
   thread.list().forEach(function(post) {
-    logger.log('* %s %s', post.hash, JSON.stringify(post.title));
+    print(post, '');
   });
+  cb();
+}
+
+function show(hash, cb) {
+  if (!hash) {
+    logger.log('Hash argument is required: %s [opts] show <hash>',
+               process.argv[1]);
+    return cb();
+  }
+
+  var found = thread.list().some(function(post) {
+    if (post.hash !== hash)
+      return false;
+
+    logger.log(post.content);
+
+    return true;
+  });
+
+  if (!found)
+    logger.log('Post with hash %s not found', hash);
+
   cb();
 }
 
