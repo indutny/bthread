@@ -15,6 +15,11 @@ var prompt = require('prompt');
 var leveldown = require('leveldown');
 
 var argv = require('yargs')
+    .usage('Usage: \n' +
+           ' * List messages: $0 list\n' +
+           ' * Show message: $0 show <hash-or-first-bytes-of-it>\n' +
+           ' * Post message: $0 post\n' +
+           ' * Post reply: $0 post --repl-to=<full-hash>')
     .demand([ 'host' ])
     .alias('h', 'host')
     .alias('p', 'passphrase')
@@ -287,7 +292,7 @@ function list(cb) {
 function show(hash, cb) {
   if (!hash) {
     logger.err('Hash argument is required: %s [opts] show <hash>',
-               process.argv[1]);
+               process.argv[0]);
     return cb();
   }
 
