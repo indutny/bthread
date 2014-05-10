@@ -20,13 +20,13 @@ Logger.prototype.unpause = function unpause() {
   var queue = this.queue;
   this.queue = [];
 
-  for (var i = 0; i < queue.length; i++)
-    this.log.apply(this, queue[i]);
+  for (var i = 0; i < queue.length; i += 2)
+    this[queue[i]].apply(this, queue[i + 1]);
 };
 
 Logger.prototype.out = function out() {
   if (this.paused > 0) {
-    this.queue.push(arguments);
+    this.queue.push('out', arguments);
     return;
   }
 
@@ -35,7 +35,7 @@ Logger.prototype.out = function out() {
 
 Logger.prototype._err = function _err(kind, args) {
   if (this.paused > 0) {
-    this.queue.push(arguments);
+    this.queue.push(kind, arguments);
     return;
   }
 
