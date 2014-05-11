@@ -14,19 +14,29 @@ var progress = require('progress');
 var prompt = require('prompt');
 var leveldown = require('leveldown');
 
-var argv = require('yargs')
+var yargs = require('yargs')
     .usage('Usage: \n' +
-           ' * List messages: $0 list\n' +
-           ' * Show message: $0 show <hash-or-first-bytes-of-it>\n' +
-           ' * Post message: $0 post\n' +
-           ' * Post reply: $0 post --repl-to=<full-hash>\n' +
-           ' * Get private key: $0 key')
-    .demand([ 'host' ])
-    .alias('h', 'host')
+           ' * List messages: $0 host.name list\n' +
+           ' * Show message: $0 host.name show <hash-or-first-bytes-of-it>\n' +
+           ' * Post message: $0 host.name post\n' +
+           ' * Post reply: $0 host.name post --reply-to=<full-hash>\n' +
+           ' * Get private key: $0 host.name key')
     .alias('p', 'passphrase')
-    .alias('c', 'post-cost')
+    .describe('p', 'Passphrase to use when posting on this thread')
     .alias('r', 'reply-to')
-    .argv;
+    .describe('r', 'Hash of the post you want to reply to')
+var argv = yargs.argv;
+
+var logger = utils.logger();
+
+if (argv._.length < 2) {
+  yargs.showHelp();
+  logger.err('Not enough arguments');
+  process.exit(1);
+  return;
+}
+
+var host = argv._[0];
 
 var addrs = [
   'seed.bitcoin.sipa.be',
@@ -37,10 +47,8 @@ var addrs = [
   'bitseed.xf2.org'
 ];
 
-var logger = utils.logger();
-
 logger.info('Welcome to BThread');
-logger.info('You are going to start participating on: %s', argv.host);
+logger.info('You are going to start participating on: %s', host);
 if (argv.passphrase)
   return onPassphrase(null, { passphrase: argv.passphrase });
 
@@ -66,13 +74,13 @@ function onPassphrase(err, result) {
   }
 
   var pass = result.passphrase;
-  if (pass.length < 20)
-    logger.err('Please use passphrase with length > 20 symbols');
+  if (pass.length < 32)
+    logger.err('Please use passphrase with length > 32 symbols');
 
   thread = new bthread({
     db: leveldown,
     dbPath: path.resolve(__dirname, '..', 'db'),
-    host: argv.host,
+    host: host,
     passphrase: pass,
     postCost: argv.postCost,
 
@@ -85,7 +93,7 @@ function onPassphrase(err, result) {
 
   thread.once('dns-record', function(r) {
     logger.info('===================================================');
-    logger.info('Set this as TXT record for %s:', argv.host);
+    logger.info('Set this as TXT record for %s:', host);
     logger.info('    ' + r);
     logger.info('===================================================');
   });
@@ -139,14 +147,19 @@ function onPassphrase(err, result) {
 }
 
 function start() {
-  if (argv._[0] === 'post')
+  var cmd = argv._[1];
+  if (cmd === 'post')
     return post(exit);
-  else if (argv._[0] === 'list')
+  else if (cmd === 'list')
     return list(exit);
-  else if (argv._[0] === 'show')
-    return show(argv._[1], exit);
-  else if (argv._[0] === 'key')
+  else if (cmd === 'show')
+    return show(argv._[2], exit);
+  else if (cmd === 'key')
     return key(exit);
+
+  yargs.showHelp();
+  logger.err('Unknown command %s', cmd);
+  exit();
 }
 
 function exit() {
@@ -292,6 +305,7 @@ function list(cb) {
 
 function show(hash, cb) {
   if (!hash) {
+    yargs.showHelp();
     logger.err('Hash argument is required: %s [opts] show <hash>',
                process.argv[0]);
     return cb();
