@@ -1,6 +1,30 @@
 # BThread
 
-Just a bike-shed.
+Thread messaging and blog posting using Bitcoin blockchain.
+
+## Usage
+
+```
+$ npm install -g bthread
+$ bthread --help
+Usage:
+ * List messages: bthread host.name list
+ * Show message: bthread host.name show <hash-or-first-bytes-of-it>
+ * Post message: bthread host.name post
+ * Post reply: bthread host.name post --reply-to=<full-hash>
+ * Get private key: bthread host.name key
+
+Options:
+  -p, --passphrase  Passphrase to use when posting on this thread
+  -r, --reply-to    Hash of the post you want to reply to
+```
+
+Example
+
+```
+$ bthread blog.indutny.com list
+$ # Try it!
+```
 
 #### LICENSE
 
