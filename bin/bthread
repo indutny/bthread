@@ -78,7 +78,7 @@ function onPassphrase(err, result) {
     logger.err('Please use passphrase with length > 32 symbols');
 
   thread = new bthread({
-    db: leveldown,
+    dbEngine: leveldown,
     dbPath: path.resolve(__dirname, '..', 'db'),
     host: host,
     passphrase: pass,
