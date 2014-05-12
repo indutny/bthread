@@ -279,13 +279,14 @@ function post(cb) {
 
 function list(cb) {
   function print(post, prefix) {
+    var title = JSON.stringify(post.title || 'Untitled');
     if (post.author !== 'owner') {
       logger.out(prefix + '* %s %s by <%s>',
                  post.hash,
-                 JSON.stringify(post.title),
+                 title,
                  post.author);
     } else {
-      logger.out(prefix + '* %s %s', post.hash, JSON.stringify(post.title));
+      logger.out(prefix + '* %s %s', post.hash, title);
     }
     post.replies.forEach(function(reply) {
       print(reply, prefix + '  ');
