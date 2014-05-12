@@ -137,13 +137,7 @@ function onPassphrase(err, result) {
     }
   });
 
-  var waiting = 2;
-  thread.once('search-end', next);
-  thread.once('full', next);
-  function next() {
-    if (--waiting === 0)
-      start();
-  }
+  thread.once('load', start);
 }
 
 function start() {
