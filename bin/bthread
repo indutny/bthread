@@ -175,6 +175,7 @@ function post(cb) {
   });
 
   var postMsg = null;
+  var postCost = null;
   ed.once('close', function() {
     logger.unpause();
     var msg = fs.readFileSync(tmpFile).toString();
@@ -198,8 +199,10 @@ function post(cb) {
     };
 
     // Owner, no point in sending additional money to self
-    if (thread.isOwner)
-      return thread.post(new bn(0), postMsg, confirm, onPost);
+    if (thread.isOwner) {
+      postCost = new bn(0);
+      return thread.post(postCost, postMsg, confirm, onPost);
+    }
 
     prompt.get({
       properties: {
@@ -216,7 +219,8 @@ function post(cb) {
         return exit();
       }
 
-      thread.post(new bn(result.cost, 10), postMsg, confirm, onPost);
+      postCost = new bn(result.cost, 10);
+      thread.post(postCost, postMsg, confirm, onPost);
     });
   });
 
@@ -272,7 +276,7 @@ function post(cb) {
     // Retry later
     thread.once('balance', function() {
       if (this.balance.cmp(balance) >= 0)
-        this.post(postMsg, onPost);
+        this.post(postCost, postMsg, confirm, onPost);
     });
   }
 }
