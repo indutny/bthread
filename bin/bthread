@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 var bthread = require('../');
+var bcoin = require('bcoin');
 var utils = require('./utils');
 
 var bn = require('bn.js');
@@ -262,15 +263,13 @@ function post(cb) {
   function retry(balance) {
     logger.info('');
     logger.info('You don\'t have enough bitcoins to post a message');
-    logger.info('Minimum required value is %s satoshi (~%d BTC)',
-                balance.toString(10),
-                balance.toString(10) / 10000000);
+    logger.info('Minimum required value is %s BTC',
+                bcoin.utils.toBTC(balance));
 
     var req = balance.sub(thread.balance);
-    logger.info('Please send %d satoshi (~%d BTC) to your address: ' +
+    logger.info('Please send %s BTC to your address: ' +
                    '%s to continue',
-                req.toString(10),
-                req.toString(10) / 10000000,
+                bcoin.utils.toBTC(req),
                 thread.wallet.self.getAddress());
 
     // Retry later
