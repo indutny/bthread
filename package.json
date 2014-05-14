@@ -1,6 +1,6 @@
 {
   "name": "bthread",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Bitcoin based message thread",
   "main": "lib/bthread.js",
   "bin": "bin/bthread",
