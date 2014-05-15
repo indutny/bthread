@@ -156,6 +156,10 @@ function onPassphrase(err, result) {
     logger.info('Wallet balance updated: %s', b.toString(10));
   });
 
+  thread.on('tx', function(tx) {
+    wallet.addTX(tx);
+  });
+
   thread.on('wallet', function(addr, kind) {
     logger.info('Thread owner\'s wallet is %s', addr);
   });
