@@ -48,6 +48,16 @@ var addrs = [
   'bitseed.xf2.org'
 ];
 
+var thread;
+var wallet;
+
+// Display nice progress bar
+var search = {
+  bar: null,
+  last: null,
+  total: null
+};
+
 logger.info('Welcome to BThread');
 logger.info('You are going to start participating on: %s', host);
 if (argv.passphrase)
@@ -65,8 +75,29 @@ prompt.get({
 }, function(err, result) {
   onPassphrase(err, result);
 });
+function onSearch(kind, a, b) {
+  if (search.bar && search.total !== b)
+    return;
 
-var thread;
+  if (!search.bar) {
+    logger.pause();
+    search.bar = new progress('  \x1b[34;msearching ' + kind + ' txs ' +
+                              '[:bar] :etas\x1b[0;m', {
+      total: b,
+      width: 20
+    });
+    search.total = b;
+    search.last = 0;
+  }
+  search.bar.tick(a - search.last);
+  if (a === b) {
+    logger.unpause();
+    search.bar = null;
+    search.total = -1;
+  } else {
+    search.last = a;
+  }
+}
 
 function onPassphrase(err, result) {
   if (err) {
@@ -82,7 +113,6 @@ function onPassphrase(err, result) {
     dbEngine: leveldown,
     dbPath: path.resolve(__dirname, '..', 'db'),
     host: host,
-    passphrase: pass,
     postCost: argv.postCost,
 
     resolveTxt: dns.resolveTxt,
@@ -92,31 +122,30 @@ function onPassphrase(err, result) {
     }
   });
 
-  thread.once('dns-record', function(r) {
-    logger.info('===================================================');
-    logger.info('Set this as TXT record for %s:', host);
-    logger.info('    ' + r);
-    logger.info('===================================================');
+  // Self wallet
+  wallet = new bcoin.wallet({
+    scope: host,
+    passphrase: pass,
+    storage: thread.db
+  });
+  thread.pool.addWallet(wallet)
+             .on('progress', function(t, c) {
+               onSearch('self', t, c);
+             })
+             .once('end', next);
+  logger.info('Your wallet is %s', wallet.getAddress());
+
+  thread.once('create-dns', function(cb) {
+    cb(pass, function(r) {
+      logger.info('===================================================');
+      logger.info('Set this as TXT record for %s:', host);
+      logger.info('    ' + r);
+      logger.info('===================================================');
+    });
   });
 
-  var searchBar = null;
-  var searchLast = 0;
-  thread.on('search', function(range, a, b) {
-    if (!searchBar || searchBar.total !== b) {
-      var start = new Date(range.start * 1000).toDateString();
-      var end = new Date(range.end * 1000).toDateString();
-      logger.pause();
-      searchBar = new progress('  \x1b[34;msearching ' + start + ' -> ' + end +
-                               ' [:bar] :etas\x1b[0;m', {
-        total: b,
-        width: 20
-      });
-      searchLast = 0;
-    }
-    searchBar.tick(a - searchLast);
-    if (a === b)
-      logger.unpause();
-    searchLast = a;
+  thread.on('search', function(t, c) {
+    onSearch('owner', t, c);
   });
 
   thread.on('log', function() {
@@ -128,17 +157,16 @@ function onPassphrase(err, result) {
   });
 
   thread.on('wallet', function(addr, kind) {
-    if (kind === 'self') {
-      logger.info('Your wallet is %s', addr);
-    } else {
-      if (thread.isOwner)
-        logger.info('You are the thread\'s owner');
-      else
-        logger.info('Thread owner\'s wallet is %s', addr);
-    }
+    logger.info('Thread owner\'s wallet is %s', addr);
   });
 
-  thread.once('load', start);
+  thread.once('load', next);
+
+  var waiting = 2;
+  function next() {
+    if (--waiting === 0)
+      start();
+  }
 }
 
 function start() {
@@ -200,9 +228,9 @@ function post(cb) {
     };
 
     // Owner, no point in sending additional money to self
-    if (thread.isOwner) {
+    if (thread.isOwner(wallet)) {
       postCost = new bn(0);
-      return thread.post(postCost, postMsg, confirm, onPost);
+      return thread.post(wallet, postCost, postMsg, confirm, onPost);
     }
 
     prompt.get({
@@ -221,7 +249,7 @@ function post(cb) {
       }
 
       postCost = new bn(result.cost, 10);
-      thread.post(postCost, postMsg, confirm, onPost);
+      thread.post(wallet, postCost, postMsg, confirm, onPost);
     });
   });
 
@@ -270,12 +298,12 @@ function post(cb) {
     logger.info('Please send %s BTC to your address: ' +
                    '%s to continue',
                 bcoin.utils.toBTC(req),
-                thread.wallet.self.getAddress());
+                thread.wallet.getAddress());
 
     // Retry later
     thread.once('balance', function() {
       if (this.balance.cmp(balance) >= 0)
-        this.post(postCost, postMsg, confirm, onPost);
+        thread.post(wallet, postCost, postMsg, confirm, onPost);
     });
   }
 }
@@ -320,6 +348,6 @@ function show(hash, cb) {
 
 function key(cb) {
   logger.out('Your private key is %s',
-             thread.wallet.self.getPrivateKey('base58'));
+             thread.wallet.getPrivateKey('base58'));
   cb();
 }
