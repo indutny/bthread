@@ -152,8 +152,8 @@ function onPassphrase(err, result) {
     logger.info.apply(logger, arguments);
   });
 
-  thread.on('balance', function() {
-    logger.info('Wallet balance updated: %s', thread.balance.toString(10));
+  wallet.on('balance', function(b) {
+    logger.info('Wallet balance updated: %s', b.toString(10));
   });
 
   thread.on('wallet', function(addr, kind) {
@@ -301,9 +301,8 @@ function post(cb) {
                 thread.wallet.getAddress());
 
     // Retry later
-    thread.once('balance', function() {
-      if (this.balance.cmp(balance) >= 0)
-        thread.post(wallet, postCost, postMsg, confirm, onPost);
+    wallet.on('balance', function(b) {
+      thread.post(wallet, postCost, postMsg, confirm, onPost);
     });
   }
 }
