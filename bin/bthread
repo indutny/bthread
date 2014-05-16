@@ -351,6 +351,6 @@ function show(hash, cb) {
 
 function key(cb) {
   logger.out('Your private key is %s',
-             thread.wallet.getPrivateKey('base58'));
+             wallet.getPrivateKey('base58'));
   cb();
 }
